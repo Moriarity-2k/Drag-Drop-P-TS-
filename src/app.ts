@@ -1,196 +1,247 @@
-function AutoBind(target: any, name: string, propetyDesc: PropertyDescriptor) {
-	const orig = propetyDesc.value;
+/**
+ * Note: The Drag events
+    SECOND : 
+ * Drag Over -> the second area -> types[0] , when left (prevent default)
+ * DragLeave -> when left 
+ * Drop -> getData(text/pain)
+    
+    FIRST : 
+ * dragstart -> setData , effectAllowed = move
+ * dragend
+ */
 
-	const adjusted: PropertyDescriptor = {
-		enumerable: false,
-		configurable: true,
+/**
+ * MAIN THINGS :    
+ * Decorators
+ * Enum
+ * Generics for class (exists for everything : can also be used in interfaces )
+ */
+
+function AutoBind(target: any, name: string, propertyDesc: PropertyDescriptor) {
+	const orig = propertyDesc.value;
+
+	const adj: PropertyDescriptor = {
 		get() {
-			const bindFn = orig.bind(this);
-			return bindFn;
+			const fn = orig.bind(this);
+			return fn;
 		},
 	};
-
-	return adjusted;
+	return adj;
 }
 
-interface validationObj {
-	value: string | number;
-	required?: boolean;
-	min?: number;
-	max?: number;
-	minLength?: number;
-	maxLength?: number;
+enum ProjStatus {
+	Active,
+	Finished,
 }
 
-function validatorTrim(valInput: validationObj) {
-	let valid = true;
-
-	if (valInput.required && !valInput.value.toString().trim()) valid = false;
-
-	if (
-		valInput.min &&
-		typeof valInput.value === "number" &&
-		valInput.value < valInput.min
-	)
-		valid = false;
-
-	if (
-		valInput.max &&
-		typeof valInput.value === "number" &&
-		valInput.value < valInput.max
-	)
-		valid = false;
-
-	if (
-		valInput.minLength &&
-		typeof valInput.value === "string" &&
-		valInput.value.toString().trim().length < valInput?.minLength
-	)
-		valid = false;
-
-	if (
-		valInput.maxLength &&
-		typeof valInput.value === "string" &&
-		valInput.value.length < valInput?.maxLength
-	)
-		valid = false;
-
-	return valid;
+// people title description
+class Project {
+	constructor(
+		public id: string,
+		public title: string,
+		public description: string,
+		public people: number,
+		public status: ProjStatus
+	) {}
 }
 
-// To take the project list template from html and render
+class ReadingTemplates<T extends HTMLElement, U> {
+	template: T;
+	app: U;
+	constructor(id: string) {
+		const template = document.getElementById(id)! as HTMLTemplateElement;
 
-class ProjectListRender {
-	templateEl: HTMLTemplateElement;
-	hostEl: HTMLDivElement;
-	element: HTMLElement;
+		this.app = document.getElementById("app")! as U;
 
-	constructor(private type: "active" | "finished") {
-		this.templateEl = document.getElementById(
-			"project-list"
-		) as HTMLTemplateElement;
-		this.hostEl = document.getElementById("app")! as HTMLDivElement;
-
-		const importedNode = document.importNode(this.templateEl, true);
-		this.element = importedNode.firstElementChild as HTMLElement;
-
-		this.element.id = `${this.type}-projects`;
-
-		this.attachTo_Host();
-		this.renderContent();
-	}
-
-	private renderContent() {
-		const listId = `${this.type}-projects-list`;
-
-		this.element.querySelector("ul")!.id = listId;
-		this.element.querySelector("h2")!.textContent =
-			this.type.toUpperCase() + " PROJECTS";
-	}
-
-	private attachTo_Host() {
-		this.hostEl.insertAdjacentElement("beforeend", this.element);
+		const x = document.importNode(template.content, true);
+		this.template = x.firstElementChild as T;
 	}
 }
 
-// To initiate from the template , we have in Html , (( WORKED FINE , glitch with binder))
-class InputHolder {
-	templateEl: HTMLTemplateElement;
-	hostEl: HTMLDivElement;
-	element: HTMLFormElement;
-	titleInputElement: HTMLInputElement;
-	descInputElement: HTMLInputElement;
-	peopleInputElement: HTMLInputElement;
+class Projects {
+	private allProjects: Project[] = [];
+	static instance: Projects;
+	constructor() {}
 
-	constructor() {
-		this.templateEl = document.getElementById(
-			"project-input"
-		)! as HTMLTemplateElement;
+	static giveInstance(): Projects {
+		if (this.instance) return this.instance;
 
-		this.hostEl = document.getElementById("app")! as HTMLDivElement;
-
-		const importedNode = document.importNode(this.templateEl.content, true);
-
-		this.element = importedNode.firstElementChild as HTMLFormElement;
-		this.element.id = "user-input";
-
-		this.titleInputElement = this.element.querySelector(
-			"#title"
-		) as HTMLInputElement;
-		this.descInputElement = this.element.querySelector(
-			"#description"
-		) as HTMLInputElement;
-		this.peopleInputElement = this.element.querySelector(
-			"#people"
-		) as HTMLInputElement;
-
-		this.attachTo_Host();
-		this.configure();
+		this.instance = new Projects();
+		return this.instance;
 	}
 
-	private takingInput(): [string, string, number] | void {
-		const title = this.titleInputElement.value;
-		const desc = this.descInputElement.value;
-		const no_people = this.peopleInputElement.value;
+	get Allprojects() {
+		return this.allProjects.slice();
+	}
 
-		const titleValid: validationObj = {
-			value: title,
-			required: true,
-		};
+	addProject(element: Project) {
+		this.allProjects.push(element);
+	}
 
-		const descValid: validationObj = {
-			value: desc,
-			required: true,
-			minLength: 5,
-		};
+	changeStatus(id: number) {
+		const project: Project = this.allProjects.splice(id, 1)[0];
+		project.status =
+			ProjStatus.Active === project.status
+				? ProjStatus.Finished
+				: ProjStatus.Active;
 
-		const no_people_valid: validationObj = {
-			value: +no_people,
-			required: true,
-			min: 1,
-			max: 5,
-		};
+		this.allProjects = [project, ...this.allProjects];
+
+		act.render();
+		fin.render();
+	}
+}
+
+const instance = Projects.giveInstance();
+
+class ProjectsRenderer extends ReadingTemplates<HTMLElement, HTMLDivElement> {
+	projectElements: HTMLUListElement;
+
+	constructor(private type: string) {
+		super("project-list");
+
+		(this.template.querySelector("h2")! as HTMLHeadingElement).textContent =
+			type.toUpperCase() + " PROJECTS";
+
+		this.projectElements = this.template.querySelector(
+			"ul"
+		) as HTMLUListElement;
+
+		const listEl = this.template.querySelector("ul") as HTMLUListElement;
+		listEl.id = `${this.type}-projects-list`;
+
+		this.app.insertAdjacentElement("beforeend", this.template);
+
+		this.template
+			.querySelector("ul")
+			?.addEventListener("dragover", this.dragOver);
+		// this.template
+		// .querySelector("ul")
+		// ?.addEventListener("dragleave", this.dragLeave);
+
+		// @AutoBind
+		this.template
+			.querySelector("ul")
+			?.addEventListener("drop", this.drop.bind(this));
+	}
+
+	dragOver(dragOverEvent: DragEvent) {
+		dragOverEvent.preventDefault();
+	}
+
+	drop(e: DragEvent) {
+		// e.preventDefault();
+		console.log("Drop : ", e, "\n", e.dataTransfer?.getData("text/plain"));
+
+		const projects = instance.Allprojects;
+		const projectId = projects.findIndex(
+			(x) => x.id === e.dataTransfer?.getData("text/plain")
+		);
+
+		const project = projects[projectId];
+
+		if (!project) return;
 
 		if (
-			!(
-				validatorTrim(titleValid) &&
-				validatorTrim(descValid) &&
-				validatorTrim(no_people_valid)
-			)
+			project.status !==
+			(this.type === "active" ? ProjStatus.Active : ProjStatus.Finished)
 		) {
-			alert("Not a valid input , please try again !!!");
-			return;
+			instance.changeStatus(projectId);
 		}
-		return [title, desc, +no_people];
 	}
 
-	private clearInput() {
-		this.titleInputElement.value = "";
-		this.descInputElement.value = "";
-		this.peopleInputElement.value = "";
+	render() {
+		const projects = instance.Allprojects;
+		const ul = this.template.querySelector(
+			`#${this.type}-projects-list`
+		) as HTMLUListElement;
+
+		if (ul != null) {
+			ul.innerHTML = "";
+		}
+
+		for (const proj of projects) {
+			if (
+				proj.status ===
+				(this.type === "active"
+					? ProjStatus.Active
+					: ProjStatus.Finished)
+			) {
+				const li = document.createElement("li");
+				li.draggable = true;
+				li.id = proj.id;
+				const p1 = document.createElement("p");
+				const p2 = document.createElement("p");
+				const p3 = document.createElement("p");
+				p1.textContent = proj.title;
+				p2.textContent = proj.description;
+				p3.textContent = String(proj.people);
+				li.appendChild(p1);
+				li.appendChild(p2);
+				li.appendChild(p3);
+
+				ul?.appendChild(li);
+
+				li.addEventListener("dragstart", (e: DragEvent) => {
+					if (
+						e != null &&
+						e.dataTransfer != null &&
+						e.dataTransfer.effectAllowed != null
+					)
+						e.dataTransfer.effectAllowed = "move";
+					e.dataTransfer?.setData("text/plain", proj.id);
+				});
+			}
+		}
+	}
+}
+
+// form content
+class FormRender extends ReadingTemplates<HTMLFormElement, HTMLDivElement> {
+	constructor() {
+		super("project-input");
+		this.template.id = "user-input";
+
+		this.render();
+
+		this.template.addEventListener("submit", this.formSubmitHandler);
 	}
 
 	@AutoBind
-	private submit(e: Event) {
-		// console.log(this.titleInputElement);
+	private formSubmitHandler(e: Event) {
 		e.preventDefault();
-		const userInput = this.takingInput();
 
-		if (userInput?.length) {
-			this.clearInput();
+		const title = (
+			this.template.querySelector("#title") as HTMLInputElement
+		).value;
+		const desc = (
+			this.template.querySelector("#description") as HTMLTextAreaElement
+		).value;
+		const people = (
+			this.template.querySelector("#people") as HTMLInputElement
+		).value;
+
+		if (!title || !desc || !people) {
+			alert("Invalid Input");
+			return;
 		}
+
+		const project: Project = new Project(
+			Math.random().toString(),
+			title,
+			desc,
+			+people,
+			ProjStatus.Active
+		);
+		instance.addProject(project);
+		act.render();
 	}
 
-	private configure() {
-		// this.element.addEventListener("submit", this.submit.bind(this));
-		this.element.addEventListener("submit", this.submit);
-	}
-
-	private attachTo_Host() {
-		this.hostEl.insertAdjacentElement("afterbegin", this.element);
+	render() {
+		this.app.insertAdjacentElement("afterbegin", this.template);
 	}
 }
 
-new InputHolder();
-new ProjectListRender("active");
-new ProjectListRender("finished");
+new FormRender();
+const act = new ProjectsRenderer("active");
+const fin = new ProjectsRenderer("finished");
